@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Locacao - Versão Avançada</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background-color: #f8f9fa; }
+    .card-title { font-weight: bold; }
+    footer { font-size: 0.9em; }
+  </style>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d6efd" />
+</head>
+<body class="container py-4">
+
+  <h1 class="text-center text-primary mb-4">📦 Histórico de Locação - Pulmão CD 03</h1>
+
+  <!-- Seção Adicionar Produto -->
+  <section>
+    <h4 class="text-secondary">Adicionar Produto</h4>
+    <div class="row g-2">
+      <div class="col-md-4"><input id="nome" class="form-control" placeholder="Nome do Produto"></div>
+      <div class="col-md-2">
+        <select id="pe" class="form-select">
+          <option value="">PE</option>
+          <script>for (let i = 1; i <= 14; i++) document.write(`<option value="${i}">PE${i}</option>`);</script>
+        </select>
+      </div>
+      <div class="col-md-2"><input id="coluna" type="number" class="form-control" placeholder="Coluna"></div>
+      <div class="col-md-2"><input id="nivel" type="number" class="form-control" placeholder="Nível"></div>
+      <div class="col-md-2"><input id="pulmao" type="number" class="form-control" placeholder="Pulmão"></div>
+      <div class="col-md-3 mt-2"><input id="data" type="date" class="form-control"></div>
+      <div class="col-md-3 mt-2"><input id="horario" type="time" class="form-control"></div>
+      <div class="col-md-3 mt-2"><input id="pessoa" class="form-control" placeholder="Responsável"></div>
+      <div class="col-md-3 mt-2"><input id="codigoSeguranca" type="password" class="form-control" placeholder="Código de Segurança"></div>
+      <div class="col-12 mt-3">
+        <button class="btn btn-success" onclick="adicionarProduto()">Adicionar Produto</button>
+        <button class="btn btn-secondary" onclick="exportarJSON()">Exportar JSON</button>
+        <button class="btn btn-info text-white" onclick="exportarExcel()">Exportar Excel</button>
+        <input type="file" id="importarArquivo" accept=".json" class="form-control mt-2">
+        <button class="btn btn-dark mt-2" onclick="importarJSON()">Importar JSON</button>
+      </div>
+    </div>
+  </section>
+
+  <hr class="my-4" />
+
+  <!-- Seção de Filtro -->
+  <section>
+    <h4 class="text-secondary">Buscar Produto</h4>
+    <div class="row g-2">
+      <div class="col-md-3">
+        <select id="buscarPe" class="form-select">
+          <option value="">Filtrar por PE</option>
+          <script>for (let i = 1; i <= 14; i++) document.write(`<option value="${i}">PE${i}</option>`);</script>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <input id="buscarPulmao" type="number" class="form-control" placeholder="Filtrar por Pulmão">
+      </div>
+      <div class="col-md-3">
+        <input id="buscarNome" class="form-control" placeholder="Filtrar por Nome">
+      </div>
+      <div class="col-md-3">
+        <input id="buscarData" type="date" class="form-control" placeholder="Filtrar por Data">
+      </div>
+      <div class="col-md-3">
+        <input id="buscarPessoa" class="form-control" placeholder="Filtrar por Responsável">
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-primary w-100" onclick="pesquisar()">Pesquisar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Resultados -->
+  <section id="resultado" class="mt-4"></section>
+
+  <!-- Tabela de Produtos -->
+  <section id="tabelaProdutos" class="mt-4">
+    <h4 class="text-secondary">📋 Tabela Completa de Produtos</h4>
+    <div class="table-responsive">
+      <table class="table table-bordered table-striped">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Produto</th>
+            <th>PE</th>
+            <th>Coluna</th>
+            <th>Nível</th>
+            <th>Pulmão</th>
+            <th>Data</th>
+            <th>Horário</th>
+            <th>Responsável</th>
+          </tr>
+        </thead>
+        <tbody id="corpoTabela"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Gráfico -->
+  <section class="mt-5">
+    <h4 class="text-secondary">📊 Gráfico de Produtos por Dia</h4>
+    <canvas id="graficoProdutos" height="100"></canvas>
+  </section>
+  <!-- Estatísticas -->
+  <section id="estatisticas" class="mt-5">
+    <h4 class="text-secondary">📈 Estatísticas Gerais</h4>
+    <div class="row" id="cardsEstatisticas">
+      <!-- Cards gerados via JS -->
+    </div>
+  </section>
+
+
+  <footer class="text-center text-muted mt-5">
+    Desenvolvido por Lucas Santana - Versão Avançada
+  
+<!-- Modal de Edição -->
+<div class="modal fade" id="modalEditar" tabindex="-1" aria-labelledby="modalEditarLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditarLabel">✏️ Editar Produto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+        <div class="row g-2">
+          <div class="col-md-4"><input id="editNome" class="form-control" placeholder="Nome do Produto"></div>
+          <div class="col-md-2">
+            <select id="editPe" class="form-select">
+              <option value="">PE</option>
+              <script>for (let i = 1; i <= 14; i++) document.write(`<option value="${i}">PE${i}</option>`);</script>
+            </select>
+          </div>
+          <div class="col-md-2"><input id="editColuna" type="number" class="form-control" placeholder="Coluna"></div>
+          <div class="col-md-2"><input id="editNivel" type="number" class="form-control" placeholder="Nível"></div>
+          <div class="col-md-2"><input id="editPulmao" type="number" class="form-control" placeholder="Pulmão"></div>
+          <div class="col-md-3 mt-2"><input id="editData" type="date" class="form-control"></div>
+          <div class="col-md-3 mt-2"><input id="editHorario" type="time" class="form-control"></div>
+          <div class="col-md-3 mt-2"><input id="editPessoa" class="form-control" placeholder="Responsável"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarEdicao()">Salvar Alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
+</footer>
+
+
+  <!-- Script principal -->
+  <script>
+    let db, grafico;
+
+    function abrirDB() {
+      const request = indexedDB.open("estoqueDB", 2);
+      request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains("produtos")) {
+          db.createObjectStore("produtos", { keyPath: "id", autoIncrement: true });
+        }
+      };
+      request.onsuccess = function(event) {
+        db = event.target.result;
+        atualizarLista();
+      };
+    }
+
+    function adicionarProduto() {
+      const nomeEl = document.getElementById("nome");
+      const peEl = document.getElementById("pe");
+      const colunaEl = document.getElementById("coluna");
+      const nivelEl = document.getElementById("nivel");
+      const pulmaoEl = document.getElementById("pulmao");
+      const dataEl = document.getElementById("data");
+      const horarioEl = document.getElementById("horario");
+      const pessoaEl = document.getElementById("pessoa");
+      const codigoEl = document.getElementById("codigoSeguranca");
+
+      const codigoCorreto = "1234";
+      if (codigoEl.value !== codigoCorreto) {
+        alert("🔒 Código de segurança incorreto!");
+        return;
+      }
+
+      if (!nomeEl.value || !peEl.value || !colunaEl.value || !nivelEl.value ||
+          !pulmaoEl.value || !dataEl.value || !horarioEl.value || !pessoaEl.value) {
+        alert("⚠️ Por favor, preencha todos os campos antes de adicionar o produto.");
+        return;
+      }
+
+      const produto = {
+        nome: nomeEl.value,
+        pe: peEl.value,
+        coluna: colunaEl.value,
+        nivel: nivelEl.value,
+        pulmao: pulmaoEl.value,
+        data: dataEl.value,
+        horario: horarioEl.value,
+        pessoa: pessoaEl.value
+      };
+
+      const tx = db.transaction("produtos", "readwrite");
+      tx.objectStore("produtos").add(produto);
+      tx.oncomplete = () => {
+        alert("✅ Produto adicionado com sucesso!");
+        atualizarLista();
+        nomeEl.value = peEl.value = colunaEl.value = nivelEl.value = pulmaoEl.value = pessoaEl.value = codigoEl.value = "";
+        const agora = new Date();
+        dataEl.value = agora.toISOString().split("T")[0];
+        horarioEl.value = agora.toTimeString().slice(0, 5);
+        nomeEl.focus();
+      };
+    }
+
+    function exportarJSON() {
+      const tx = db.transaction("produtos", "readonly");
+      const store = tx.objectStore("produtos");
+      const produtos = [];
+      store.openCursor().onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+          produtos.push(cursor.value);
+          cursor.continue();
+        } else {
+          const blob = new Blob([JSON.stringify(produtos, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "produtos.json";
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      };
+    }
+
+    function importarJSON() {
+      const input = document.getElementById("importarArquivo");
+      const file = input.files[0];
+      if (!file) return alert("Selecione um arquivo JSON para importar.");
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const produtos = JSON.parse(e.target.result);
+        const tx = db.transaction("produtos", "readwrite");
+        const store = tx.objectStore("produtos");
+        produtos.forEach(p => store.add(p));
+        tx.oncomplete = () => {
+          alert("✅ Dados importados com sucesso!");
+          atualizarLista();
+        };
+        tx.onerror = () => {
+          alert("❌ Erro ao importar. Verifique se o arquivo está no formato correto.");
+        };
+      };
+      reader.readAsText(file);
+    }
+
+    function exportarExcel() {
+      const tx = db.transaction("produtos", "readonly");
+      const store = tx.objectStore("produtos");
+      const produtos = [];
+      store.openCursor().onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+          produtos.push(cursor.value);
+          cursor.continue();
+        } else {
+          const worksheet = XLSX.utils.json_to_sheet(produtos);
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Produtos");
+          XLSX.writeFile(workbook, "produtos.xlsx");
+        }
+      };
+    }
+
+    function pesquisar() {
+      const peFiltro = buscarPe.value;
+      const pulmaoFiltro = buscarPulmao.value;
+      const nomeFiltro = document.getElementById("buscarNome").value.toLowerCase();
+      const dataFiltro = document.getElementById("buscarData").value;
+      const pessoaFiltro = document.getElementById("buscarPessoa").value.toLowerCase();
+      const resultado = document.getElementById("resultado");
+      resultado.innerHTML = "";
+
+      const tx = db.transaction("produtos", "readonly");
+      const store = tx.objectStore("produtos");
+      store.openCursor().onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+          const item = cursor.value;
+          const emoji = ["1", "2", "3", "4", "5", "6"].includes(item.pe) ? "💊"
+                      : ["7", "8", "9", "10", "11", "12"].includes(item.pe) ? "🌸"
+                      : ["13", "14"].includes(item.pe) ? "🍎" : "";
+
+          const nomeOk = !nomeFiltro || item.nome.toLowerCase().includes(nomeFiltro);
+          const dataOk = !dataFiltro || item.data === dataFiltro;
+          const pessoaOk = !pessoaFiltro || item.pessoa.toLowerCase().includes(pessoaFiltro);
+          const peOk = !peFiltro || item.pe === peFiltro;
+          const pulmaoOk = !pulmaoFiltro || item.pulmao === pulmaoFiltro;
+
+          if (nomeOk && dataOk && pessoaOk && peOk && pulmaoOk) {
+            resultado.innerHTML += `
+              <div class="card mb-2">
+                <div class="card-body">
+                  <h5 class="card-title">${emoji} ${item.nome}</h5>
+                  <p>Responsável: <strong>${item.pessoa}</strong></p>
+                  <p>PE: ${item.pe}, Coluna: ${item.coluna}, Nível: ${item.nivel}, Pulmão: ${item.pulmao}</p>
+                  <p class="text-muted">Data: ${item.data} às ${item.horario}</p>
+                  <button class="btn btn-sm btn-warning me-2" onclick="editarProduto(${item.id})">Editar</button>
+                  <button class="btn btn-sm btn-danger" onclick="removerProduto(${item.id})">Remover</button>
+                </div>
+              </div>`;
+          }
+          cursor.continue();
+        }
+      };
+    }
+
+    function removerProduto(id) {
+      const tx = db.transaction("produtos", "readwrite");
+      tx.objectStore("produtos").delete(id);
+      tx.oncomplete = atualizarLista;
+    }
+
+    function listarProdutosEmTabela() {
+      const corpo = document.getElementById("corpoTabela");
+      corpo.innerHTML = "";
+      const tx = db.transaction("produtos", "readonly");
+      const store = tx.objectStore("produtos");
+      store.openCursor().onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+          const item = cursor.value;
+          corpo.innerHTML += `
+            <tr>
+              <td>${item.id}</td>
+              <td>${item.nome}</td>
+              <td>${item.pe}</td>
+              <td>${item.coluna}</td>
+              <td>${item.nivel}</td>
+              <td>${item.pulmao}</td>
+              <td>${item.data}</td>
+              <td>${item.horario}</td>
+              <td>${item.pessoa}</td>
+            </tr>`;
+          cursor.continue();
+        }
+      };
+    }
+
+    function gerarGraficoProdutosPorDia() {
+      const tx = db.transaction("produtos", "readonly");
+      const store = tx.objectStore("produtos");
+      const contagemPorDia = {};
+
+      store.openCursor().onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+          const data = cursor.value.data;
+          contagemPorDia[data] = (contagemPorDia[data] || 0) + 1;
+          cursor.continue();
+        } else {
+          const labels = Object.keys(contagemPorDia).sort();
+          const dados = labels.map(data => contagemPorDia[data]);
+          const ctx = document.getElementById("graficoProdutos").getContext("2d");
+
+          if (grafico) grafico.destroy();
+          grafico = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: 'Quantidade de Produtos',
+                data: dados,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+              }
+            }
+          });
+        }
+      };
+    }
+
+    function atualizarLista() {
+      gerarEstatisticas();
+      pesquisar();
+      listarProdutosEmTabela();
+      gerarGraficoProdutosPorDia();
+    }
+
+    function editarProduto(id) {
+  const tx = db.transaction("produtos", "readonly");
+  const store = tx.objectStore("produtos");
+  const request = store.get(id);
+  request.onsuccess = function() {
+    const produto = request.result;
+    document.getElementById("editId").value = produto.id;
+    document.getElementById("editNome").value = produto.nome;
+    document.getElementById("editPe").value = produto.pe;
+    document.getElementById("editColuna").value = produto.coluna;
+    document.getElementById("editNivel").value = produto.nivel;
+    document.getElementById("editPulmao").value = produto.pulmao;
+    document.getElementById("editData").value = produto.data;
+    document.getElementById("editHorario").value = produto.horario;
+    document.getElementById("editPessoa").value = produto.pessoa;
+    
+    const modal = new bootstrap.Modal(document.getElementById("modalEditar"));
+    modal.show();
+  };
+}
+
+function salvarEdicao() {
+  const id = Number(document.getElementById("editId").value);
+  const produtoAtualizado = {
+    id: id,
+    nome: document.getElementById("editNome").value,
+    pe: document.getElementById("editPe").value,
+    coluna: document.getElementById("editColuna").value,
+    nivel: document.getElementById("editNivel").value,
+    pulmao: document.getElementById("editPulmao").value,
+    data: document.getElementById("editData").value,
+    horario: document.getElementById("editHorario").value,
+    pessoa: document.getElementById("editPessoa").value
+  };
+
+  const tx = db.transaction("produtos", "readwrite");
+  tx.objectStore("produtos").put(produtoAtualizado);
+  tx.oncomplete = () => {
+    const modal = bootstrap.Modal.getInstance(document.getElementById("modalEditar"));
+    modal.hide();
+    atualizarLista();
+    alert("✏️ Produto editado com sucesso!");
+  };
+}
+
+    
+    function gerarEstatisticas() {
+      const tx = db.transaction("produtos", "readonly");
+      const store = tx.objectStore("produtos");
+
+      const total = { count: 0 };
+      const peMap = {};
+      const pessoaMap = {};
+      const dataMap = {};
+
+      store.openCursor().onsuccess = function (event) {
+        const cursor = event.target.result;
+        if (cursor) {
+          const p = cursor.value;
+          total.count++;
+          peMap[p.pe] = (peMap[p.pe] || 0) + 1;
+          pessoaMap[p.pessoa] = (pessoaMap[p.pessoa] || 0) + 1;
+          dataMap[p.data] = (dataMap[p.data] || 0) + 1;
+          cursor.continue();
+        } else {
+          const maisPE = Object.keys(peMap).reduce((a, b) => peMap[a] > peMap[b] ? a : b, "");
+          const maisPessoa = Object.keys(pessoaMap).reduce((a, b) => pessoaMap[a] > pessoaMap[b] ? a : b, "");
+          const dataTop = Object.keys(dataMap).reduce((a, b) => dataMap[a] > dataMap[b] ? a : b, "");
+
+          const html = `
+            <div class="col-md-3 mb-3">
+              <div class="card text-bg-primary shadow">
+                <div class="card-body">
+                  <h6 class="card-title">Total de Produtos</h6>
+                  <h3>${total.count}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="card text-bg-secondary shadow">
+                <div class="card-body">
+                  <h6 class="card-title">PEs Diferentes</h6>
+                  <h3>${Object.keys(peMap).length}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="card text-bg-success shadow">
+                <div class="card-body">
+                  <h6 class="card-title">PE Mais Usado</h6>
+                  <h3>PE${maisPE} (${peMap[maisPE]}x)</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="card text-bg-warning shadow">
+                <div class="card-body">
+                  <h6 class="card-title">Responsável Top</h6>
+                  <h3>${maisPessoa} (${pessoaMap[maisPessoa]}x)</h3>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="card text-bg-danger shadow">
+                <div class="card-body">
+                  <h6 class="card-title">Dia com Mais Registros</h6>
+                  <h3>${dataTop} (${dataMap[dataTop]}x)</h3>
+                </div>
+              </div>
+            </div>
+          `;
+          document.getElementById("cardsEstatisticas").innerHTML = html;
+        }
+      };
+    }
+
+    window.onload = function () {
+      abrirDB();
+      const agora = new Date();
+      document.getElementById("data").value = agora.toISOString().split("T")[0];
+      document.getElementById("horario").value = agora.toTimeString().slice(0, 5);
+      document.getElementById("nome").focus();
+    };
+  </script>
+
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('✅ Service Worker registrado com sucesso!'))
+        .catch(error => console.log('❌ Erro ao registrar Service Worker:', error));
+    }
+  </script>
+
+<script>
+  async function salvarNaPlanilhaGoogle(dados) {
+    const url = 'https://script.google.com/macros/s/AKfycbzP8IbpBh8LOcMaIMXZdMnUnkwSyGWWg8U_Y6yTNSOKjs3mb6A6nvBLGZ0B9fPNl1zN/exec';
+    
+    try {
+      const resposta = await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify(dados),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const texto = await resposta.text();
+      console.log('Resposta da planilha:', texto);
+    } catch (erro) {
+      console.error('Erro ao salvar na planilha:', erro);
+    }
+  }
+
+  // Adiciona chamada para salvar na planilha junto com o IndexedDB
+  const adicionarProdutoOriginal = adicionarProduto;
+  adicionarProduto = function() {
+    const nomeEl = document.getElementById("nome");
+    const peEl = document.getElementById("pe");
+    const colunaEl = document.getElementById("coluna");
+    const nivelEl = document.getElementById("nivel");
+    const pulmaoEl = document.getElementById("pulmao");
+    const dataEl = document.getElementById("data");
+    const horarioEl = document.getElementById("horario");
+    const pessoaEl = document.getElementById("pessoa");
+    const codigoEl = document.getElementById("codigoSeguranca");
+
+    const codigoCorreto = "1234";
+    if (codigoEl.value !== codigoCorreto) {
+      alert("🔒 Código de segurança incorreto!");
+      return;
+    }
+
+    if (!nomeEl.value || !peEl.value || !colunaEl.value || !nivelEl.value ||
+        !pulmaoEl.value || !dataEl.value || !horarioEl.value || !pessoaEl.value) {
+      alert("⚠️ Por favor, preencha todos os campos antes de adicionar o produto.");
+      return;
+    }
+
+    const produto = {
+      nome: nomeEl.value,
+      pe: peEl.value,
+      coluna: colunaEl.value,
+      nivel: nivelEl.value,
+      pulmao: pulmaoEl.value,
+      data: dataEl.value,
+      horario: horarioEl.value,
+      pessoa: pessoaEl.value
+    };
+
+    salvarNaPlanilhaGoogle(produto); // envia pra planilha
+    adicionarProdutoOriginal();      // salva localmente
+  }
+</script>
+
+</body>
+
+</html>
