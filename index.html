@@ -596,6 +596,58 @@ function salvarEdicao() {
   }
 </script>
 
+
+<script>
+  async function carregarDadosDaPlanilhaGoogle() {
+    const url = 'https://script.google.com/macros/s/AKfycbwhf_qqG0t0p77P_3nTr_piVzgW6MGrjLZU6SgEMfBl4aD_egUfUh2LosLoq-_uijUj/exec';
+
+    try {
+      const resposta = await fetch(url);
+      const dados = await resposta.json();
+
+      const tx = db.transaction("produtos", "readwrite");
+      const store = tx.objectStore("produtos");
+
+      store.clear().onsuccess = () => {
+        dados.forEach(p => {
+          store.add({
+            nome: p.produto,
+            pe: p.pe,
+            coluna: p.coluna,
+            nivel: p.nível,
+            pulmao: p.pulmão,
+            data: p.data,
+            horario: p.horário,
+            pessoa: p.responsável
+          });
+        });
+        tx.oncomplete = () => {
+          console.log("📥 Dados carregados da planilha.");
+          atualizarLista();
+        };
+      };
+    } catch (erro) {
+      console.error("❌ Erro ao carregar dados da planilha:", erro);
+    }
+  }
+
+  // Modifica o abrirDB original para chamar a leitura da planilha
+  const abrirDBOriginal = abrirDB;
+  abrirDB = function () {
+    const request = indexedDB.open("estoqueDB", 2);
+    request.onupgradeneeded = function (event) {
+      db = event.target.result;
+      if (!db.objectStoreNames.contains("produtos")) {
+        db.createObjectStore("produtos", { keyPath: "id", autoIncrement: true });
+      }
+    };
+    request.onsuccess = function (event) {
+      db = event.target.result;
+      carregarDadosDaPlanilhaGoogle();
+    };
+  };
+</script>
+
 </body>
 
 </html>
