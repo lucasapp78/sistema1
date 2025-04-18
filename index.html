@@ -219,7 +219,7 @@
         horarioEl.value = agora.toTimeString().slice(0, 5);
         
         // Enviar para Google Planilhas
-        fetch("https://script.google.com/macros/s/AKfycbyM9MAP7r5GZ7sS7xpXWmOF-qmzYXW9ZiBKk_pr1-7MeSMV4WS8f52JzdPqbtSfymNN/exec", {
+        fetch("https://script.google.com/macros/s/AKfycbwlc7JQwURMucz62u_WKZXq-PF9olofFMChBXgJtqB3Jjro7417isxxj98Efzm5z_CP/exec", {
           method: "POST",
           body: JSON.stringify([produto]),
           headers: { "Content-Type": "application/json" }
