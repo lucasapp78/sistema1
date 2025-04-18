@@ -7,55 +7,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-  const adicionarProdutoOriginalBackup = adicionarProdutoOriginal;
-  adicionarProduto = function() {
-    const nomeEl = document.getElementById("nome");
-    const peEl = document.getElementById("pe");
-    const colunaEl = document.getElementById("coluna");
-    const nivelEl = document.getElementById("nivel");
-    const pulmaoEl = document.getElementById("pulmao");
-    const dataEl = document.getElementById("data");
-    const horarioEl = document.getElementById("horario");
-    const pessoaEl = document.getElementById("pessoa");
-    const codigoEl = document.getElementById("codigoSeguranca");
-
-    const codigoCorreto = "1234";
-    if (codigoEl.value !== codigoCorreto) {
-      alert("🔒 Código de segurança incorreto!");
-      return;
-    }
-
-    if (!nomeEl.value || !peEl.value || !colunaEl.value || !nivelEl.value ||
-        !pulmaoEl.value || !dataEl.value || !horarioEl.value || !pessoaEl.value) {
-      alert("⚠️ Por favor, preencha todos os campos antes de adicionar o produto.");
-      return;
-    }
-
-    const produto = {
-      nome: nomeEl.value,
-      pe: peEl.value,
-      coluna: colunaEl.value,
-      nivel: nivelEl.value,
-      pulmao: pulmaoEl.value,
-      data: dataEl.value,
-      horario: horarioEl.value,
-      pessoa: pessoaEl.value
-    };
-
-    salvarNaPlanilhaGoogle(produto);
-    adicionarProdutoOriginalBackup();
-
-    // ⏳ Aguarda 2 segundos e recarrega da planilha
-    setTimeout(() => {
-      carregarDadosDaPlanilhaGoogle();
-    }, 2000);
-  }
-</script>
-
   <style>
-    
-  body { background-color: #f8f9fa; }
+    body { background-color: #f8f9fa; }
     .card-title { font-weight: bold; }
     footer { font-size: 0.9em; }
   </style>
@@ -264,6 +217,13 @@
         const agora = new Date();
         dataEl.value = agora.toISOString().split("T")[0];
         horarioEl.value = agora.toTimeString().slice(0, 5);
+        
+        // Enviar para Google Planilhas
+        fetch("https://script.google.com/macros/s/AKfycbyM9MAP7r5GZ7sS7xpXWmOF-qmzYXW9ZiBKk_pr1-7MeSMV4WS8f52JzdPqbtSfymNN/exec", {
+          method: "POST",
+          body: JSON.stringify([produto]),
+          headers: { "Content-Type": "application/json" }
+        });
         nomeEl.focus();
       };
     }
@@ -567,6 +527,16 @@ function salvarEdicao() {
     }
 
     window.onload = function () {
+  
+fetch("https://script.google.com/macros/s/AKfycbyM9MAP7r5GZ7sS7xpXWmOF-qmzYXW9ZiBKk_pr1-7MeSMV4WS8f52JzdPqbtSfymNN/exec")
+  .then(res => res.json())
+  .then(data => {
+    const tx = db.transaction("produtos", "readwrite");
+    const store = tx.objectStore("produtos");
+    data.forEach(p => store.put(p));
+    tx.oncomplete = atualizarLista;
+  });
+
       abrirDB();
       const agora = new Date();
       document.getElementById("data").value = agora.toISOString().split("T")[0];
@@ -584,117 +554,6 @@ function salvarEdicao() {
         .catch(error => console.log('❌ Erro ao registrar Service Worker:', error));
     }
   </script>
-
-<script>
-  async function salvarNaPlanilhaGoogle(dados) {
-    const url = 'https://script.google.com/macros/s/AKfycbzP8IbpBh8LOcMaIMXZdMnUnkwSyGWWg8U_Y6yTNSOKjs3mb6A6nvBLGZ0B9fPNl1zN/exec';
-    
-    try {
-      const resposta = await fetch(url, {
-        method: 'POST',
-        body: JSON.stringify(dados),
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const texto = await resposta.text();
-      console.log('Resposta da planilha:', texto);
-    } catch (erro) {
-      console.error('Erro ao salvar na planilha:', erro);
-    }
-  }
-
-  // Adiciona chamada para salvar na planilha junto com o IndexedDB
-  const adicionarProdutoOriginal = adicionarProduto;
-  adicionarProduto = function() {
-    const nomeEl = document.getElementById("nome");
-    const peEl = document.getElementById("pe");
-    const colunaEl = document.getElementById("coluna");
-    const nivelEl = document.getElementById("nivel");
-    const pulmaoEl = document.getElementById("pulmao");
-    const dataEl = document.getElementById("data");
-    const horarioEl = document.getElementById("horario");
-    const pessoaEl = document.getElementById("pessoa");
-    const codigoEl = document.getElementById("codigoSeguranca");
-
-    const codigoCorreto = "1234";
-    if (codigoEl.value !== codigoCorreto) {
-      alert("🔒 Código de segurança incorreto!");
-      return;
-    }
-
-    if (!nomeEl.value || !peEl.value || !colunaEl.value || !nivelEl.value ||
-        !pulmaoEl.value || !dataEl.value || !horarioEl.value || !pessoaEl.value) {
-      alert("⚠️ Por favor, preencha todos os campos antes de adicionar o produto.");
-      return;
-    }
-
-    const produto = {
-      nome: nomeEl.value,
-      pe: peEl.value,
-      coluna: colunaEl.value,
-      nivel: nivelEl.value,
-      pulmao: pulmaoEl.value,
-      data: dataEl.value,
-      horario: horarioEl.value,
-      pessoa: pessoaEl.value
-    };
-
-    salvarNaPlanilhaGoogle(produto); // envia pra planilha
-    adicionarProdutoOriginal();      // salva localmente
-  }
-</script>
-
-
-<script>
-  async function carregarDadosDaPlanilhaGoogle() {
-    const url = 'https://script.google.com/macros/s/AKfycbwhf_qqG0t0p77P_3nTr_piVzgW6MGrjLZU6SgEMfBl4aD_egUfUh2LosLoq-_uijUj/exec';
-
-    try {
-      const resposta = await fetch(url);
-      const dados = await resposta.json();
-
-      const tx = db.transaction("produtos", "readwrite");
-      const store = tx.objectStore("produtos");
-
-      store.clear().onsuccess = () => {
-        dados.forEach(p => {
-          store.add({
-            nome: p.produto,
-            pe: p.pe,
-            coluna: p.coluna,
-            nivel: p.nível,
-            pulmao: p.pulmão,
-            data: p.data,
-            horario: p.horário,
-            pessoa: p.responsável
-          });
-        });
-        tx.oncomplete = () => {
-          console.log("📥 Dados carregados da planilha.");
-          atualizarLista();
-        };
-      };
-    } catch (erro) {
-      console.error("❌ Erro ao carregar dados da planilha:", erro);
-    }
-  }
-
-  // Modifica o abrirDB original para chamar a leitura da planilha
-  const abrirDBOriginal = abrirDB;
-  abrirDB = function () {
-    const request = indexedDB.open("estoqueDB", 2);
-    request.onupgradeneeded = function (event) {
-      db = event.target.result;
-      if (!db.objectStoreNames.contains("produtos")) {
-        db.createObjectStore("produtos", { keyPath: "id", autoIncrement: true });
-      }
-    };
-    request.onsuccess = function (event) {
-      db = event.target.result;
-      carregarDadosDaPlanilhaGoogle();
-    };
-  };
-</script>
-
 </body>
 
 </html>
