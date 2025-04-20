@@ -51,19 +51,27 @@
     let candles = [];
     let ws;
     let sinaisPendentes = [];
-    const app_id = 1089; // ← APP ID DE TESTE
+    const app_id = 1089;
+    let pingInterval;
 
     function carregar() {
-      if (ws) ws.close();
+      if (ws) {
+        ws.close();
+        clearInterval(pingInterval);
+      }
+
       candles = [];
 
       const symbol = document.getElementById("pair").value;
       const interval = parseInt(document.getElementById("interval").value);
 
+      // Conexão WebSocket correta com app_id
       ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${app_id}`);
 
       ws.onopen = () => {
-        console.log("✅ WebSocket conectado");
+        console.log("✅ WebSocket conectado!");
+
+        // Enviar a requisição inicial
         const req = {
           ticks_history: symbol,
           adjust_start_time: 1,
@@ -73,6 +81,12 @@
           subscribe: 1
         };
         ws.send(JSON.stringify(req));
+
+        // Pingar a cada 120s
+        pingInterval = setInterval(() => {
+          ws.send(JSON.stringify({ ping: 1 }));
+          console.log("🔄 Ping enviado ao WebSocket");
+        }, 120000);
       };
 
       ws.onerror = (err) => {
@@ -81,6 +95,7 @@
 
       ws.onclose = () => {
         console.warn("⚠️ WebSocket foi fechado.");
+        clearInterval(pingInterval);
       };
 
       ws.onmessage = (msg) => {
@@ -115,7 +130,6 @@
     }
 
     function desenharGrafico() {
-      if (!candles.length) return;
       const closes = candles.map(c => c.close);
       const labels = candles.map(c => c.time);
       const ctx = document.getElementById('grafico').getContext('2d');
@@ -142,7 +156,6 @@
     }
 
     function atualizarGrafico() {
-      if (!chart || !candles.length) return;
       chart.data.labels = candles.map(c => c.time);
       chart.data.datasets[0].data = candles.map(c => c.close);
       chart.update();
@@ -193,7 +206,7 @@
       });
     }
 
-    carregar(); // inicia ao abrir a página
+    carregar(); // inicia automaticamente
   </script>
 </body>
 </html>
