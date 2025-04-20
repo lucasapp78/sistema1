@@ -17,12 +17,22 @@
 
   <div>
     Par:
-    <select id="pair">
-      <option value="BTCUSDT">BTC/USDT</option>
-      <option value="ETHUSDT">ETH/USDT</option>
+    <select id="pair" onchange="atualizarGrafico()">
+      <!-- Lista de ativos populares no TradingView -->
+      <option value="BINANCE:BTCUSDT">BTC/USDT</option>
+      <option value="BINANCE:ETHUSDT">ETH/USDT</option>
+      <option value="BINANCE:XRPUSDT">XRP/USDT</option>
+      <option value="BINANCE:LTCUSDT">LTC/USDT</option>
+      <option value="BINANCE:ADAUSDT">ADA/USDT</option>
+      <option value="BINANCE:SOLUSDT">SOL/USDT</option>
+      <option value="BINANCE:BNBUSDT">BNB/USDT</option>
+      <option value="BINANCE:DOGEUSDT">DOGE/USDT</option>
+      <option value="BINANCE:DOTUSDT">DOT/USDT</option>
+      <option value="BINANCE:SHIBUSDT">SHIB/USDT</option>
+      <!-- Adicione mais ativos conforme necessário -->
     </select>
     Tempo:
-    <select id="interval">
+    <select id="interval" onchange="atualizarGrafico()">
       <option value="1m">M1</option>
       <option value="5m" selected>M5</option>
       <option value="15m">M15</option>
@@ -35,21 +45,69 @@
     <div id="tradingview_01"></div>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script type="text/javascript">
-      new TradingView.widget({
-        "width": 800,
-        "height": 400,
-        "symbol": "BINANCE:BTCUSDT",
-        "interval": "5",
-        "timezone": "Etc/UTC",
-        "theme": "dark",
-        "style": "1",
-        "locale": "br",
-        "toolbar_bg": "#222",
-        "enable_publishing": false,
-        "hide_top_toolbar": false,
-        "allow_symbol_change": true,
-        "container_id": "tradingview_01"
-      });
+      let widget;  // Declaramos a variável do widget para atualizar o gráfico
+
+      // Função para atualizar o gráfico com base na seleção do ativo
+      function atualizarGrafico() {
+        const pair = document.getElementById('pair').value;
+        const interval = document.getElementById('interval').value;
+
+        // Se o widget já estiver criado, destruímos e recriamos ele para atualizar
+        if (widget) {
+          widget.remove();
+        }
+
+        // Criação do novo widget com o par e intervalo selecionados
+        widget = new TradingView.widget({
+          "width": 800,
+          "height": 400,
+          "symbol": pair,
+          "interval": interval,
+          "timezone": "Etc/UTC",
+          "theme": "dark",
+          "style": "1",
+          "locale": "br",
+          "toolbar_bg": "#222",
+          "enable_publishing": false,
+          "hide_top_toolbar": false,
+          "allow_symbol_change": true,
+          "container_id": "tradingview_01"
+        });
+      }
+
+      // Função para carregar dados iniciais
+      async function carregar(reset = false) {
+        const pair = document.getElementById('pair').value;
+        const interval = document.getElementById('interval').value;
+        analisarSinal(pair);
+        verificarSinais();
+      }
+
+      function analisarSinal(par) {
+        const sinalDiv = document.getElementById('sinal');
+        sinalDiv.innerText = `SINAL: PUT detectado!`;
+        sinalDiv.style.color = 'red';
+        document.getElementById('alerta').play();
+        adicionarHistorico(par, 'PUT', new Date().toLocaleTimeString());
+      }
+
+      function adicionarHistorico(par, direcao, hora) {
+        const tabela = document.getElementById('tabela');
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-index', hora);
+        tr.innerHTML = `<td>${hora}</td><td>${par}</td><td>${direcao}</td><td id="resultado-${hora}">⏳</td>`;
+        tabela.appendChild(tr);
+      }
+
+      function verificarSinais() {
+        // Exemplo de verificação de sinal
+        const sinal = document.querySelector('#tabela tr[data-index]');
+        const tdResultado = sinal.querySelector('td:last-child');
+        tdResultado.textContent = '✅ GREEN';
+        tdResultado.style.color = 'lime';
+      }
+
+      carregar(true);  // Carrega os dados iniciais
     </script>
   </div>
 
@@ -63,51 +121,5 @@
   </div>
 
   <audio id="alerta" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
-
-  <script>
-    let sinaisPendentes = [];
-
-    async function carregar(reset = false) {
-      const pair = document.getElementById('pair').value;
-      const interval = document.getElementById('interval').value;
-
-      // Logica de analise do sinal aqui, removi a parte que puxa dados de gráficos diretamente via API.
-      analisarSinal(pair);
-      verificarSinais();
-    }
-
-    function analisarSinal(par) {
-      const sinalDiv = document.getElementById('sinal');
-      // A lógica de sinais ainda está aqui, você pode adaptar para sua estratégia de pullback.
-
-      // Exemplo de lógica de sinal PUT (você pode adaptar a lógica conforme necessário):
-      sinalDiv.innerText = `SINAL: PUT detectado!`;
-      sinalDiv.style.color = 'red';
-      document.getElementById('alerta').play();
-      adicionarHistorico(par, 'PUT', new Date().toLocaleTimeString());
-    }
-
-    function adicionarHistorico(par, direcao, hora) {
-      sinaisPendentes.push({ hora, par, direcao, resolvido: false });
-      const tabela = document.getElementById('tabela');
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-index', hora);
-      tr.innerHTML = `<td>${hora}</td><td>${par}</td><td>${direcao}</td><td id="resultado-${hora}">⏳</td>`;
-      tabela.appendChild(tr);
-    }
-
-    function verificarSinais() {
-      sinaisPendentes.forEach(sinal => {
-        // Exemplo de verificação do sinal, você pode adaptar conforme sua lógica de resultado
-        const tdResultado = document.getElementById(`resultado-${sinal.hora}`);
-        tdResultado.textContent = '✅ GREEN';  // Pode ser baseado em algum critério de sua análise
-        tdResultado.style.color = 'lime';
-        sinal.resolvido = true;
-      });
-    }
-
-    carregar(true);
-    setInterval(() => carregar(), 60000); // Atualiza a cada 1 min
-  </script>
 </body>
 </html>
