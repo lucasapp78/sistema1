@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>Sinal Automático - Pullback M5</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; }
+    canvas { max-width: 100%; background: #222; border: 1px solid #555; }
     select, button { margin: 10px; padding: 6px; }
     #sinal { font-size: 24px; font-weight: bold; margin-top: 10px; }
     #historico { margin-top: 20px; max-height: 200px; overflow-y: auto; }
@@ -13,26 +15,16 @@
   </style>
 </head>
 <body>
-  <h2>Sistema de Sinais - Pullback com Rejeição (Quotex)</h2>
+  <h2>Sistema de Sinais - Pullback com Rejeição (Binance)</h2>
 
   <div>
     Par:
-    <select id="pair" onchange="atualizarGrafico()">
-      <!-- Lista de ativos populares no TradingView -->
-      <option value="BINANCE:BTCUSDT">BTC/USDT</option>
-      <option value="BINANCE:ETHUSDT">ETH/USDT</option>
-      <option value="BINANCE:XRPUSDT">XRP/USDT</option>
-      <option value="BINANCE:LTCUSDT">LTC/USDT</option>
-      <option value="BINANCE:ADAUSDT">ADA/USDT</option>
-      <option value="BINANCE:SOLUSDT">SOL/USDT</option>
-      <option value="BINANCE:BNBUSDT">BNB/USDT</option>
-      <option value="BINANCE:DOGEUSDT">DOGE/USDT</option>
-      <option value="BINANCE:DOTUSDT">DOT/USDT</option>
-      <option value="BINANCE:SHIBUSDT">SHIB/USDT</option>
-      <!-- Adicione mais ativos conforme necessário -->
+    <select id="pair">
+      <option value="BTCUSDT">BTC/USDT</option>
+      <option value="ETHUSDT">ETH/USDT</option>
     </select>
     Tempo:
-    <select id="interval" onchange="atualizarGrafico()">
+    <select id="interval">
       <option value="1m">M1</option>
       <option value="5m" selected>M5</option>
       <option value="15m">M15</option>
@@ -40,86 +32,147 @@
     <button onclick="carregar(true)">Atualizar</button>
   </div>
 
-  <!-- Gráfico do TradingView -->
-  <div class="tradingview-widget-container">
-    <div id="tradingview_01"></div>
-    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-    <script type="text/javascript">
-      let widget;  // Declaramos a variável do widget para atualizar o gráfico
-
-      // Função para atualizar o gráfico com base na seleção do ativo
-      function atualizarGrafico() {
-        const pair = document.getElementById('pair').value;
-        const interval = document.getElementById('interval').value;
-
-        // Se o widget já estiver criado, destruímos e recriamos ele para atualizar
-        if (widget) {
-          widget.remove();
-        }
-
-        // Criação do novo widget com o par e intervalo selecionados
-        widget = new TradingView.widget({
-          "width": 800,
-          "height": 400,
-          "symbol": pair,
-          "interval": interval,
-          "timezone": "Etc/UTC",
-          "theme": "dark",
-          "style": "1",
-          "locale": "br",
-          "toolbar_bg": "#222",
-          "enable_publishing": false,
-          "hide_top_toolbar": false,
-          "allow_symbol_change": true,
-          "container_id": "tradingview_01"
-        });
-      }
-
-      // Função para carregar dados iniciais
-      async function carregar(reset = false) {
-        const pair = document.getElementById('pair').value;
-        const interval = document.getElementById('interval').value;
-        analisarSinal(pair);
-        verificarSinais();
-      }
-
-      function analisarSinal(par) {
-        const sinalDiv = document.getElementById('sinal');
-        sinalDiv.innerText = `SINAL: PUT detectado!`;
-        sinalDiv.style.color = 'red';
-        document.getElementById('alerta').play();
-        adicionarHistorico(par, 'PUT', new Date().toLocaleTimeString());
-      }
-
-      function adicionarHistorico(par, direcao, hora) {
-        const tabela = document.getElementById('tabela');
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-index', hora);
-        tr.innerHTML = `<td>${hora}</td><td>${par}</td><td>${direcao}</td><td id="resultado-${hora}">⏳</td>`;
-        tabela.appendChild(tr);
-      }
-
-      function verificarSinais() {
-        // Exemplo de verificação de sinal
-        const sinal = document.querySelector('#tabela tr[data-index]');
-        const tdResultado = sinal.querySelector('td:last-child');
-        tdResultado.textContent = '✅ GREEN';
-        tdResultado.style.color = 'lime';
-      }
-
-      carregar(true);  // Carrega os dados iniciais
-    </script>
-  </div>
-
+  <canvas id="grafico" width="800" height="400"></canvas>
   <div id="sinal">Analisando...</div>
 
   <div id="historico">
     <h4>Histórico de Sinais</h4>
     <table id="tabela">
-      <tr><th>Hora</th><th>Par</th><th>Sinal</th><th>Resultado</th></tr>
+      <tr><th>Hora</th><th>Par</th><th>Sinal</th><th>Resultado</th><th>Hora de Entrada</th></tr>
     </table>
   </div>
 
   <audio id="alerta" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+  <script>
+    let chart;
+    let candles = [];
+    let sinaisPendentes = [];
+
+    async function carregar(reset = false) {
+      const pair = document.getElementById('pair').value;
+      const interval = document.getElementById('interval').value;
+      const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=21`;
+      const res = await fetch(url);
+      const dados = await res.json();
+
+      candles = dados.map(d => ({
+        time: new Date(d[0]).toLocaleTimeString(),
+        open: parseFloat(d[1]),
+        high: parseFloat(d[2]),
+        low: parseFloat(d[3]),
+        close: parseFloat(d[4])
+      }));
+
+      const closes = candles.map(c => c.close);
+      const labels = candles.map(c => c.time);
+
+      if (reset || !chart) {
+        const ctx = document.getElementById('grafico').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Fechamento',
+              data: closes,
+              borderColor: 'lime',
+              backgroundColor: 'rgba(0,255,0,0.1)',
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            animation: { duration: 1000 },
+            scales: { y: { beginAtZero: false } },
+            plugins: { legend: { display: false } }
+          }
+        });
+      } else {
+        atualizarGrafico();
+      }
+
+      analisarSinal(pair);
+      verificarSinais();
+    }
+
+    async function atualizarGrafico() {
+      const pair = document.getElementById('pair').value;
+      const interval = document.getElementById('interval').value;
+      const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=1`;
+      const res = await fetch(url);
+      const novo = await res.json();
+
+      const novoCandle = {
+        time: new Date(novo[0][0]).toLocaleTimeString(),
+        open: parseFloat(novo[0][1]),
+        high: parseFloat(novo[0][2]),
+        low: parseFloat(novo[0][3]),
+        close: parseFloat(novo[0][4])
+      };
+
+      candles.push(novoCandle);
+      if (candles.length > 21) candles.shift();
+
+      chart.data.labels = candles.map(c => c.time);
+      chart.data.datasets[0].data = candles.map(c => c.close);
+      chart.update();
+
+      analisarSinal(document.getElementById('pair').value);
+      verificarSinais();
+    }
+
+    function analisarSinal(par) {
+      const ultimas = candles.slice(-4); // Pega as últimas 4 velas
+      const anterior = ultimas[0].close;  // Fecha da vela anterior
+      const forca = ultimas[1].close > ultimas[1].open;  // Confirma se a vela anterior é forte
+      const rejeicao = ultimas[2].close < ultimas[2].open &&  // Condição de rejeição
+                       (ultimas[2].open - ultimas[2].close) > (ultimas[2].high - ultimas[2].low) * 0.4;
+
+      const sinalDiv = document.getElementById('sinal');
+      if (forca && rejeicao && ultimas[1].close >= anterior) {
+        sinalDiv.innerText = `SINAL: PUT detectado! Entre no próximo minuto após a vela de fechamento!`;
+        sinalDiv.style.color = 'red';
+        document.getElementById('alerta').play();
+        adicionarHistorico(par, 'PUT', candles.length - 2, ultimas[1].time); // Mostra o horário da vela
+      } else {
+        sinalDiv.innerText = "Nenhum sinal no momento.";
+        sinalDiv.style.color = 'white';
+      }
+    }
+
+    function adicionarHistorico(par, direcao, index, horaEntrada) {
+      sinaisPendentes.push({ index, par, direcao, resolvido: false });
+      const tabela = document.getElementById('tabela');
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-index', index);
+      const hora = new Date().toLocaleTimeString();
+      tr.innerHTML = `<td>${hora}</td><td>${par}</td><td>${direcao}</td><td id="resultado-${index}">⏳</td><td>${horaEntrada}</td>`;  // Exibe o horário de entrada
+      tabela.appendChild(tr);
+    }
+
+    function verificarSinais() {
+      sinaisPendentes.forEach(sinal => {
+        if (!sinal.resolvido && candles[sinal.index + 1]) {
+          const candleEntrada = candles[sinal.index];
+          const candleResultado = candles[sinal.index + 1];
+
+          let green = false;
+          if (sinal.direcao === 'PUT') {
+            green = candleResultado.close < candleEntrada.close;
+          }
+
+          const tdResultado = document.getElementById(`resultado-${sinal.index}`);
+          tdResultado.textContent = green ? '✅ GREEN' : '❌ RED';
+          tdResultado.style.color = green ? 'lime' : 'red';
+
+          sinal.resolvido = true;
+        }
+      });
+    }
+
+    carregar(true);
+    setInterval(() => atualizarGrafico(), 60000); // Atualiza a cada 1 min
+  </script>
 </body>
 </html>
