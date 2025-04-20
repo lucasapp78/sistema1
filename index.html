@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Sinal Automático - Pullback M5 (Deriv)</title>
+  <title>Sinal Automático - Pullback M5</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; }
@@ -15,23 +15,21 @@
   </style>
 </head>
 <body>
-  <h2>Sistema de Sinais - Pullback com Rejeição (Deriv)</h2>
+  <h2>Sistema de Sinais - Pullback com Rejeição (Binance)</h2>
 
   <div>
-    Ativo:
+    Par:
     <select id="pair">
-      <option value="R_100">Volatility 100 (R_100)</option>
-      <option value="R_75">Volatility 75 (R_75)</option>
-      <option value="frxUSDJPY">USD/JPY</option>
-      <option value="frxEURUSD">EUR/USD</option>
+      <option value="BTCUSDT">BTC/USDT</option>
+      <option value="ETHUSDT">ETH/USDT</option>
     </select>
     Tempo:
     <select id="interval">
-      <option value="60">M1</option>
-      <option value="300" selected>M5</option>
-      <option value="900">M15</option>
+      <option value="1m">M1</option>
+      <option value="5m" selected>M5</option>
+      <option value="15m">M15</option>
     </select>
-    <button onclick="carregar()">Atualizar</button>
+    <button onclick="carregar(true)">Atualizar</button>
   </div>
 
   <canvas id="grafico" width="800" height="400"></canvas>
@@ -49,126 +47,87 @@
   <script>
     let chart;
     let candles = [];
-    let ws;
     let sinaisPendentes = [];
-    const app_id = 1089;
-    let pingInterval;
 
-    function carregar() {
-      if (ws) {
-        ws.close();
-        clearInterval(pingInterval);
-      }
+    async function carregar(reset = false) {
+      const pair = document.getElementById('pair').value;
+      const interval = document.getElementById('interval').value;
+      const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=21`;
+      const res = await fetch(url);
+      const dados = await res.json();
 
-      candles = [];
+      candles = dados.map(d => ({
+        time: new Date(d[0]).toLocaleTimeString(),
+        open: parseFloat(d[1]),
+        high: parseFloat(d[2]),
+        low: parseFloat(d[3]),
+        close: parseFloat(d[4])
+      }));
 
-      const symbol = document.getElementById("pair").value;
-      const interval = parseInt(document.getElementById("interval").value);
-
-      // Conexão WebSocket correta com app_id
-      ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${app_id}`);
-
-      ws.onopen = () => {
-        console.log("✅ WebSocket conectado!");
-
-        // Enviar a requisição inicial
-        const req = {
-          ticks_history: symbol,
-          adjust_start_time: 1,
-          count: 50,
-          granularity: interval,
-          style: "candles",
-          subscribe: 1
-        };
-        ws.send(JSON.stringify(req));
-
-        // Pingar a cada 120s
-        pingInterval = setInterval(() => {
-          ws.send(JSON.stringify({ ping: 1 }));
-          console.log("🔄 Ping enviado ao WebSocket");
-        }, 120000);
-      };
-
-      ws.onerror = (err) => {
-        console.error("❌ Erro no WebSocket:", err);
-      };
-
-      ws.onclose = () => {
-        console.warn("⚠️ WebSocket foi fechado.");
-        clearInterval(pingInterval);
-      };
-
-      ws.onmessage = (msg) => {
-        const data = JSON.parse(msg.data);
-        if (data.candles) {
-          candles = data.candles.map(c => ({
-            time: new Date(c.epoch * 1000).toLocaleTimeString(),
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close
-          }));
-          desenharGrafico();
-          analisarSinal(symbol);
-          verificarSinais();
-        } else if (data.candle) {
-          const c = data.candle;
-          const novo = {
-            time: new Date(c.epoch * 1000).toLocaleTimeString(),
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close
-          };
-          candles.push(novo);
-          if (candles.length > 50) candles.shift();
-          atualizarGrafico();
-          analisarSinal(symbol);
-          verificarSinais();
-        }
-      };
-    }
-
-    function desenharGrafico() {
       const closes = candles.map(c => c.close);
       const labels = candles.map(c => c.time);
-      const ctx = document.getElementById('grafico').getContext('2d');
-      if (chart) chart.destroy();
-      chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: 'Fechamento',
-            data: closes,
-            borderColor: 'lime',
-            backgroundColor: 'rgba(0,255,0,0.1)',
-            tension: 0.4,
-            fill: true
-          }]
-        },
-        options: {
-          animation: { duration: 1000 },
-          scales: { y: { beginAtZero: false } },
-          plugins: { legend: { display: false } }
-        }
-      });
+
+      if (reset || !chart) {
+        const ctx = document.getElementById('grafico').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Fechamento',
+              data: closes,
+              borderColor: 'lime',
+              backgroundColor: 'rgba(0,255,0,0.1)',
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            animation: { duration: 1000 },
+            scales: { y: { beginAtZero: false } },
+            plugins: { legend: { display: false } }
+          }
+        });
+      } else {
+        atualizarGrafico();
+      }
+
+      analisarSinal(pair);
+      verificarSinais();
     }
 
-    function atualizarGrafico() {
+    async function atualizarGrafico() {
+      const pair = document.getElementById('pair').value;
+      const interval = document.getElementById('interval').value;
+      const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=1`;
+      const res = await fetch(url);
+      const novo = await res.json();
+
+      const novoCandle = {
+        time: new Date(novo[0][0]).toLocaleTimeString(),
+        open: parseFloat(novo[0][1]),
+        high: parseFloat(novo[0][2]),
+        low: parseFloat(novo[0][3]),
+        close: parseFloat(novo[0][4])
+      };
+
+      candles.push(novoCandle);
+      if (candles.length > 21) candles.shift();
+
       chart.data.labels = candles.map(c => c.time);
       chart.data.datasets[0].data = candles.map(c => c.close);
       chart.update();
+
+      analisarSinal(document.getElementById('pair').value);
+      verificarSinais();
     }
 
     function analisarSinal(par) {
       const ultimas = candles.slice(-4);
-      if (ultimas.length < 4) return;
-
       const anterior = ultimas[0].close;
       const forca = ultimas[1].close > ultimas[1].open;
       const rejeicao = ultimas[2].close < ultimas[2].open &&
-        (ultimas[2].open - ultimas[2].close) > (ultimas[2].high - ultimas[2].low) * 0.4;
+                       (ultimas[2].open - ultimas[2].close) > (ultimas[2].high - ultimas[2].low) * 0.4;
 
       const sinalDiv = document.getElementById('sinal');
       if (forca && rejeicao && ultimas[1].close >= anterior) {
@@ -195,18 +154,25 @@
     function verificarSinais() {
       sinaisPendentes.forEach(sinal => {
         if (!sinal.resolvido && candles[sinal.index + 1]) {
-          const entrada = candles[sinal.index];
-          const resultado = candles[sinal.index + 1];
-          const green = sinal.direcao === 'PUT' ? resultado.close < entrada.close : false;
-          const td = document.getElementById(`resultado-${sinal.index}`);
-          td.textContent = green ? '✅ GREEN' : '❌ RED';
-          td.style.color = green ? 'lime' : 'red';
+          const candleEntrada = candles[sinal.index];
+          const candleResultado = candles[sinal.index + 1];
+
+          let green = false;
+          if (sinal.direcao === 'PUT') {
+            green = candleResultado.close < candleEntrada.close;
+          }
+
+          const tdResultado = document.getElementById(`resultado-${sinal.index}`);
+          tdResultado.textContent = green ? '✅ GREEN' : '❌ RED';
+          tdResultado.style.color = green ? 'lime' : 'red';
+
           sinal.resolvido = true;
         }
       });
     }
 
-    carregar(); // inicia automaticamente
+    carregar(true);
+    setInterval(() => atualizarGrafico(), 60000); // Atualiza a cada 1 min
   </script>
 </body>
 </html>
