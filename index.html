@@ -24,10 +24,21 @@
     .sinal span {
       font-weight: bold;
     }
+    #sinal_box {
+      margin-top: 20px;
+      padding: 20px;
+      background: #ddd;
+      border-radius: 10px;
+    }
+    .alerta {
+      font-size: 24px;
+      font-weight: bold;
+      color: green;
+    }
   </style>
 </head>
 <body>
-  <h1>🧠 Sinais com Direção - Pullback com Rejeição</h1>
+  <h1>🧠 Sinais de Entrada - Pullback com Rejeição</h1>
 
   <label>Par de moedas:</label>
   <select id="pairSelect">
@@ -38,15 +49,17 @@
 
   <div id="tradingview_chart" style="height: 600px; margin-top: 20px;"></div>
 
-  <div id="sinal_m1" class="sinal">⏳ Analisando M1...</div>
-  <div id="sinal_m5" class="sinal">⏳ Analisando M5...</div>
+  <div id="sinal_box">
+    <div id="sinal_m1" class="sinal">⏳ Analisando M1...</div>
+    <div id="sinal_m5" class="sinal">⏳ Analisando M5...</div>
+  </div>
 
   <script src="https://s3.tradingview.com/tv.js"></script>
   <script>
     const API_KEY = "e40e3e9537e64004b53f65b4f8b73901";
     let currentPair = "EUR/USD";
-    
-    // Função para tocar o som do alerta
+
+    // Função para tocar o som de alerta
     function tocarAlerta() {
       const audio = new Audio('https://www.soundjay.com/button/beep-07.wav');
       audio.play();
@@ -120,7 +133,7 @@
 
       const direcao = analisarDirecao(vela);
       if (direcao) {
-        el.innerHTML = `🚨 <span>ENTRADA SUGERIDA (${intervalo.toUpperCase()}): ${direcao}</span><br>🕐 Horário da vela: ${vela.datetime}`;
+        el.innerHTML = `🚨 <span class="alerta">ENTRADA SUGERIDA (${intervalo.toUpperCase()}): ${direcao}</span><br>🕐 Horário da vela: ${vela.datetime}`;
         el.style.color = direcao === "CALL" ? "green" : "red";
         // Tocar o alerta sonoro quando gerar sinal
         tocarAlerta();
