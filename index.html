@@ -35,6 +35,14 @@
       font-weight: bold;
       color: green;
     }
+    .countdown {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .countdown span {
+      color: red;
+    }
   </style>
 </head>
 <body>
@@ -52,12 +60,16 @@
   <div id="sinal_box">
     <div id="sinal_m1" class="sinal">⏳ Analisando M1...</div>
     <div id="sinal_m5" class="sinal">⏳ Analisando M5...</div>
+    <div id="countdown_entrada" class="countdown">⏰ Contagem para Entrada: <span id="entrada_timer">00:00</span></div>
+    <div id="countdown_expiracao" class="countdown">⏰ Contagem para Expiração: <span id="expiracao_timer">00:00</span></div>
   </div>
 
   <script src="https://s3.tradingview.com/tv.js"></script>
   <script>
     const API_KEY = "e40e3e9537e64004b53f65b4f8b73901";
     let currentPair = "EUR/USD";
+    let entradaTimer = null;
+    let expiracaoTimer = null;
 
     // Função para tocar o som de alerta
     function tocarAlerta() {
@@ -121,6 +133,40 @@
       return null;
     }
 
+    // Função para formatar o tempo
+    function formatarTempo(segundos) {
+      const minutos = Math.floor(segundos / 60);
+      const segundosRestantes = segundos % 60;
+      return `${String(minutos).padStart(2, "0")}:${String(segundosRestantes).padStart(2, "0")}`;
+    }
+
+    // Função de contagem regressiva
+    function iniciarContagemRegressiva(tipo, duracao) {
+      let tempoRestante = duracao;
+
+      if (tipo === "entrada") {
+        entradaTimer = setInterval(() => {
+          const timerElement = document.getElementById("entrada_timer");
+          timerElement.textContent = formatarTempo(tempoRestante);
+          tempoRestante--;
+          if (tempoRestante < 0) {
+            clearInterval(entradaTimer);
+          }
+        }, 1000);
+      }
+
+      if (tipo === "expiracao") {
+        expiracaoTimer = setInterval(() => {
+          const timerElement = document.getElementById("expiracao_timer");
+          timerElement.textContent = formatarTempo(tempoRestante);
+          tempoRestante--;
+          if (tempoRestante < 0) {
+            clearInterval(expiracaoTimer);
+          }
+        }, 1000);
+      }
+    }
+
     async function analisar(intervalo, elementoId) {
       const vela = await buscarCandle(intervalo);
       const el = document.getElementById(elementoId);
@@ -137,6 +183,12 @@
         el.style.color = direcao === "CALL" ? "green" : "red";
         // Tocar o alerta sonoro quando gerar sinal
         tocarAlerta();
+
+        // Iniciar contagem regressiva para entrada (1 minuto)
+        iniciarContagemRegressiva("entrada", 60); 
+
+        // Iniciar contagem regressiva para expiração (1 minuto após entrada)
+        iniciarContagemRegressiva("expiracao", 60);
       } else {
         el.textContent = `Sem sinal no momento (${intervalo.toUpperCase()})`;
         el.style.color = "gray";
