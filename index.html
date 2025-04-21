@@ -2,177 +2,148 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Sinal Automático - Pullback M5</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>Sinais Forex - Entrada CALL ou PUT</title>
   <style>
-    body { background: #111; color: #fff; font-family: sans-serif; text-align: center; }
-    canvas { max-width: 100%; background: #222; border: 1px solid #555; }
-    select, button { margin: 10px; padding: 6px; }
-    #sinal { font-size: 24px; font-weight: bold; margin-top: 10px; }
-    #historico { margin-top: 20px; max-height: 200px; overflow-y: auto; }
-    table { margin: 0 auto; border-collapse: collapse; }
-    td, th { border: 1px solid #777; padding: 5px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      text-align: center;
+    }
+    h1 {
+      margin: 20px;
+    }
+    #pairSelect {
+      padding: 5px;
+      font-size: 16px;
+    }
+    .sinal {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+    .sinal span {
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-  <h2>Sistema de Sinais - Pullback com Rejeição (Binance)</h2>
+  <h1>🧠 Sinais com Direção - Pullback com Rejeição</h1>
 
-  <div>
-    Par:
-    <select id="pair">
-      <option value="BTCUSDT">BTC/USDT</option>
-      <option value="ETHUSDT">ETH/USDT</option>
-    </select>
-    Tempo:
-    <select id="interval">
-      <option value="1m">M1</option>
-      <option value="5m" selected>M5</option>
-      <option value="15m">M15</option>
-    </select>
-    <button onclick="carregar(true)">Atualizar</button>
-  </div>
+  <label>Par de moedas:</label>
+  <select id="pairSelect">
+    <option value="EUR/USD">EUR/USD</option>
+    <option value="GBP/USD">GBP/USD</option>
+    <option value="USD/JPY">USD/JPY</option>
+  </select>
 
-  <canvas id="grafico" width="800" height="400"></canvas>
-  <div id="sinal">Analisando...</div>
+  <div id="tradingview_chart" style="height: 600px; margin-top: 20px;"></div>
 
-  <div id="historico">
-    <h4>Histórico de Sinais</h4>
-    <table id="tabela">
-      <tr><th>Hora</th><th>Par</th><th>Sinal</th><th>Resultado</th><th>Hora de Entrada</th></tr>
-    </table>
-  </div>
+  <div id="sinal_m1" class="sinal">⏳ Analisando M1...</div>
+  <div id="sinal_m5" class="sinal">⏳ Analisando M5...</div>
 
-  <audio id="alerta" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
-
+  <script src="https://s3.tradingview.com/tv.js"></script>
   <script>
-    let chart;
-    let candles = [];
-    let sinaisPendentes = [];
-
-    async function carregar(reset = false) {
-      const pair = document.getElementById('pair').value;
-      const interval = document.getElementById('interval').value;
-      const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=21`;
-      const res = await fetch(url);
-      const dados = await res.json();
-
-      candles = dados.map(d => ({
-        time: new Date(d[0]).toLocaleTimeString(),
-        open: parseFloat(d[1]),
-        high: parseFloat(d[2]),
-        low: parseFloat(d[3]),
-        close: parseFloat(d[4])
-      }));
-
-      const closes = candles.map(c => c.close);
-      const labels = candles.map(c => c.time);
-
-      if (reset || !chart) {
-        const ctx = document.getElementById('grafico').getContext('2d');
-        chart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [{
-              label: 'Fechamento',
-              data: closes,
-              borderColor: 'lime',
-              backgroundColor: 'rgba(0,255,0,0.1)',
-              tension: 0.4,
-              fill: true
-            }]
-          },
-          options: {
-            animation: { duration: 1000 },
-            scales: { y: { beginAtZero: false } },
-            plugins: { legend: { display: false } }
-          }
-        });
-      } else {
-        atualizarGrafico();
-      }
-
-      analisarSinal(pair);
-      verificarSinais();
+    const API_KEY = "e40e3e9537e64004b53f65b4f8b73901";
+    let currentPair = "EUR/USD";
+    
+    // Função para tocar o som do alerta
+    function tocarAlerta() {
+      const audio = new Audio('https://www.soundjay.com/button/beep-07.wav');
+      audio.play();
     }
 
-    async function atualizarGrafico() {
-      const pair = document.getElementById('pair').value;
-      const interval = document.getElementById('interval').value;
-      const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=1`;
-      const res = await fetch(url);
-      const novo = await res.json();
-
-      const novoCandle = {
-        time: new Date(novo[0][0]).toLocaleTimeString(),
-        open: parseFloat(novo[0][1]),
-        high: parseFloat(novo[0][2]),
-        low: parseFloat(novo[0][3]),
-        close: parseFloat(novo[0][4])
-      };
-
-      candles.push(novoCandle);
-      if (candles.length > 21) candles.shift();
-
-      chart.data.labels = candles.map(c => c.time);
-      chart.data.datasets[0].data = candles.map(c => c.close);
-      chart.update();
-
-      analisarSinal(document.getElementById('pair').value);
-      verificarSinais();
+    function formatSymbolForTV(pair) {
+      return "OANDA:" + pair.replace("/", "");
     }
 
-    function analisarSinal(par) {
-      const ultimas = candles.slice(-4); // Pega as últimas 4 velas
-      const anterior = ultimas[0].close;  // Fecha da vela anterior
-      const forca = ultimas[1].close > ultimas[1].open;  // Confirma se a vela anterior é forte
-      const rejeicao = ultimas[2].close < ultimas[2].open &&  // Condição de rejeição
-                       (ultimas[2].open - ultimas[2].close) > (ultimas[2].high - ultimas[2].low) * 0.4;
-
-      const sinalDiv = document.getElementById('sinal');
-      if (forca && rejeicao && ultimas[1].close >= anterior) {
-        sinalDiv.innerText = `SINAL: PUT detectado! Entre no próximo minuto após a vela de fechamento!`;
-        sinalDiv.style.color = 'red';
-        document.getElementById('alerta').play();
-        adicionarHistorico(par, 'PUT', candles.length - 2, ultimas[1].time); // Mostra o horário da vela
-      } else {
-        sinalDiv.innerText = "Nenhum sinal no momento.";
-        sinalDiv.style.color = 'white';
-      }
-    }
-
-    function adicionarHistorico(par, direcao, index, horaEntrada) {
-      sinaisPendentes.push({ index, par, direcao, resolvido: false });
-      const tabela = document.getElementById('tabela');
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-index', index);
-      const hora = new Date().toLocaleTimeString();
-      tr.innerHTML = `<td>${hora}</td><td>${par}</td><td>${direcao}</td><td id="resultado-${index}">⏳</td><td>${horaEntrada}</td>`;  // Exibe o horário de entrada
-      tabela.appendChild(tr);
-    }
-
-    function verificarSinais() {
-      sinaisPendentes.forEach(sinal => {
-        if (!sinal.resolvido && candles[sinal.index + 1]) {
-          const candleEntrada = candles[sinal.index];
-          const candleResultado = candles[sinal.index + 1];
-
-          let green = false;
-          if (sinal.direcao === 'PUT') {
-            green = candleResultado.close < candleEntrada.close;
-          }
-
-          const tdResultado = document.getElementById(`resultado-${sinal.index}`);
-          tdResultado.textContent = green ? '✅ GREEN' : '❌ RED';
-          tdResultado.style.color = green ? 'lime' : 'red';
-
-          sinal.resolvido = true;
-        }
+    function carregarGraficoTV(pair) {
+      const symbol = formatSymbolForTV(pair);
+      document.getElementById("tradingview_chart").innerHTML = "";
+      new TradingView.widget({
+        "width": 980,
+        "height": 600,
+        "symbol": symbol,
+        "interval": "1",
+        "timezone": "Etc/UTC",
+        "theme": "light",
+        "style": "1",
+        "locale": "br",
+        "container_id": "tradingview_chart"
       });
     }
 
-    carregar(true);
-    setInterval(() => atualizarGrafico(), 60000); // Atualiza a cada 1 min
+    async function buscarCandle(intervalo) {
+      const url = `https://api.twelvedata.com/time_series?symbol=${currentPair}&interval=${intervalo}&outputsize=2&apikey=${API_KEY}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.status === "error") return { error: data.message };
+        const vela = data.values[0]; // última vela
+        return {
+          datetime: vela.datetime,
+          o: parseFloat(vela.open),
+          h: parseFloat(vela.high),
+          l: parseFloat(vela.low),
+          c: parseFloat(vela.close)
+        };
+      } catch {
+        return { error: "Erro ao conectar com a API." };
+      }
+    }
+
+    function analisarDirecao(vela) {
+      const corpo = Math.abs(vela.o - vela.c);
+      const pavioSuperior = vela.h - Math.max(vela.o, vela.c);
+      const pavioInferior = Math.min(vela.o, vela.c) - vela.l;
+
+      const rejeicao = corpo < 0.0003 &&
+        (pavioSuperior > corpo * 1.5 || pavioInferior > corpo * 1.5);
+
+      if (!rejeicao) return null;
+
+      // Direção: se pavio inferior é maior, tendência de alta (CALL), se superior, PUT
+      if (pavioInferior > pavioSuperior) return "CALL";
+      if (pavioSuperior > pavioInferior) return "PUT";
+
+      return null;
+    }
+
+    async function analisar(intervalo, elementoId) {
+      const vela = await buscarCandle(intervalo);
+      const el = document.getElementById(elementoId);
+
+      if (vela.error) {
+        el.textContent = `Erro (${intervalo.toUpperCase()}): ${vela.error}`;
+        el.style.color = "red";
+        return;
+      }
+
+      const direcao = analisarDirecao(vela);
+      if (direcao) {
+        el.innerHTML = `🚨 <span>ENTRADA SUGERIDA (${intervalo.toUpperCase()}): ${direcao}</span><br>🕐 Horário da vela: ${vela.datetime}`;
+        el.style.color = direcao === "CALL" ? "green" : "red";
+        // Tocar o alerta sonoro quando gerar sinal
+        tocarAlerta();
+      } else {
+        el.textContent = `Sem sinal no momento (${intervalo.toUpperCase()})`;
+        el.style.color = "gray";
+      }
+    }
+
+    function rodarAnalise() {
+      analisar("1min", "sinal_m1");
+      analisar("5min", "sinal_m5");
+    }
+
+    document.getElementById("pairSelect").addEventListener("change", (e) => {
+      currentPair = e.target.value;
+      carregarGraficoTV(currentPair);
+      rodarAnalise();
+    });
+
+    carregarGraficoTV(currentPair);
+    rodarAnalise();
+    setInterval(rodarAnalise, 60000);
   </script>
 </body>
 </html>
