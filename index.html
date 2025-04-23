@@ -43,6 +43,8 @@
         <button class="btn btn-info text-white" onclick="exportarExcel()">Exportar Excel</button>
         <input type="file" id="importarArquivo" accept=".json" class="form-control mt-2">
         <button class="btn btn-dark mt-2" onclick="importarJSON()">Importar JSON</button>
+        <!-- Novo botão para importar dados do GitHub -->
+        <button class="btn btn-primary mt-3" onclick="carregarDadosDoGitHub()">Importar Dados do GitHub</button>
       </div>
     </div>
   </section>
@@ -108,7 +110,6 @@
     <h4 class="text-secondary">📊 Gráfico de Produtos por Dia</h4>
     <canvas id="graficoProdutos" height="100"></canvas>
   </section>
-  
   <!-- Estatísticas -->
   <section id="estatisticas" class="mt-5">
     <h4 class="text-secondary">📈 Estatísticas Gerais</h4>
@@ -121,66 +122,88 @@
     Desenvolvido por Lucas Santana - Versão Avançada
   </footer>
 
-  <script>
-    let db, grafico;
+  <!-- Modal de Edição -->
+  <div class="modal fade" id="modalEditar" tabindex="-1" aria-labelledby="modalEditarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalEditarLabel">✏️ Editar Produto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editId">
+          <div class="row g-2">
+            <div class="col-md-4"><input id="editNome" class="form-control" placeholder="Nome do Produto"></div>
+            <div class="col-md-2">
+              <select id="editPe" class="form-select">
+                <option value="">PE</option>
+                <script>for (let i = 1; i <= 14; i++) document.write(`<option value="${i}">PE${i}</option>`);</script>
+              </select>
+            </div>
+            <div class="col-md-2"><input id="editColuna" type="number" class="form-control" placeholder="Coluna"></div>
+            <div class="col-md-2"><input id="editNivel" type="number" class="form-control" placeholder="Nível"></div>
+            <div class="col-md-2"><input id="editPulmao" type="number" class="form-control" placeholder="Pulmão"></div>
+            <div class="col-md-3 mt-2"><input id="editData" type="date" class="form-control"></div>
+            <div class="col-md-3 mt-2"><input id="editHorario" type="time" class="form-control"></div>
+            <div class="col-md-3 mt-2"><input id="editPessoa" class="form-control" placeholder="Responsável"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" onclick="salvarEdicao()">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    // Função para abrir o banco de dados
-    function abrirDB() {
+  <!-- Script principal -->
+  <script>
+    const githubRawURL = "https://raw.githubusercontent.com/lucasapp78/sistema/refs/heads/main/DADOS.JSON";
+    
+    async function abrirDB() {
       const request = indexedDB.open("estoqueDB", 2);
-      request.onupgradeneeded = function(event) {
-        db = event.target.result;
-        if (!db.objectStoreNames.contains("produtos")) {
-          db.createObjectStore("produtos", { keyPath: "id", autoIncrement: true });
-        }
-      };
-      request.onsuccess = function(event) {
-        db = event.target.result;
-        const tx = db.transaction("produtos", "readonly");
-        const store = tx.objectStore("produtos");
-        store.count().onsuccess = function(event) {
-          if (event.target.result === 0) {
-            carregarDadosDoGitHub();  // Carrega os dados do GitHub
-          } else {
-            atualizarLista();
+      return new Promise((resolve, reject) => {
+        request.onupgradeneeded = function(event) {
+          db = event.target.result;
+          if (!db.objectStoreNames.contains("produtos")) {
+            db.createObjectStore("produtos", { keyPath: "id", autoIncrement: true });
           }
         };
-      };
+        request.onsuccess = function(event) {
+          db = event.target.result;
+          resolve(db);
+        };
+        request.onerror = function(event) {
+          reject("Erro ao abrir o banco de dados");
+        };
+      });
     }
 
-    // Função para carregar os dados do GitHub
     async function carregarDadosDoGitHub() {
-      const githubRawURL = "https://raw.githubusercontent.com/lucasapp78/sistema/refs/heads/main/DADOS.JSON";
+      // Aguarda a abertura do banco de dados
+      await abrirDB();
+
       try {
         const res = await fetch(githubRawURL);
         if (!res.ok) throw new Error("Arquivo remoto não encontrado");
         const dados = await res.json();
-        const tx = db.transaction("produtos", "readwrite");
+
+        const tx = db.transaction("produtos", "readwrite");  // Agora o 'db' está disponível
         const store = tx.objectStore("produtos");
         dados.forEach(p => store.add(p));
-        tx.oncomplete = atualizarLista;
+
+        tx.oncomplete = () => {
+          atualizarLista();  // Atualiza a interface com os novos dados
+        };
       } catch (err) {
         console.warn("⚠️ Não foi possível carregar dados do GitHub:", err);
       }
     }
-
-    // Função para atualizar a lista de produtos
-    function atualizarLista() {
-      gerarEstatisticas();
-      pesquisar();
-      listarProdutosEmTabela();
-      gerarGraficoProdutosPorDia();
-    }
-
-    window.onload = function () {
-      abrirDB();
-      const agora = new Date();
-      document.getElementById("data").value = agora.toISOString().split("T")[0];
-      document.getElementById("horario").value = agora.toTimeString().slice(0, 5);
-      document.getElementById("nome").focus();
-    };
   </script>
 
+  <!-- Scripts adicionais -->
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+
 </body>
 </html>
